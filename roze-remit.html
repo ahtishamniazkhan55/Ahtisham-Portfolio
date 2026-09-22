@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Roze Remit website redesign case study by Ahtisham Niaz.">
+<title>Roze Remit — Ahtisham Niaz</title>
+<style>
+:root{--bg:#fff;--ink:#0a0a0a}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"GT Standard","Helvetica Neue",Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+body{min-height:100vh;overflow-x:hidden}
+.viewer{width:100%;min-height:100vh;background:#fff;display:flex;justify-content:center}
+.canvas-wrap{width:100%;display:flex;justify-content:center;align-items:flex-start}
+canvas{display:block;width:100%;height:auto;background:#fff}
+.status{position:fixed;inset:0;display:grid;place-items:center;background:#fff;z-index:5;font-size:13px;letter-spacing:.02em;color:#666}
+.status[hidden]{display:none}
+.back{position:fixed;top:18px;left:18px;z-index:10;display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:999px;background:rgba(10,10,10,.88);color:#fff;text-decoration:none;font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;backdrop-filter:blur(10px);opacity:.18;transition:opacity .2s ease,transform .2s ease}
+.back:hover,.back:focus-visible{opacity:1;transform:translateY(-1px)}
+@media(max-width:700px){.back{top:10px;left:10px;padding:9px 12px;font-size:10px;opacity:.35}}
+@media(prefers-reduced-motion:reduce){.back{transition:none}}
+</style>
+</head>
+<body>
+<a class="back" href="index.html#work" aria-label="Back to portfolio">← Back</a>
+<div class="status" id="status">Loading case study…</div>
+<main class="viewer" aria-label="Roze Remit case study">
+  <div class="canvas-wrap"><canvas id="pdfCanvas"></canvas></div>
+</main>
+<script type="module">
+import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+
+const status=document.getElementById('status');
+const canvas=document.getElementById('pdfCanvas');
+const ctx=canvas.getContext('2d',{alpha:false});
+let pdfDoc=null;
+let page=null;
+let renderTask=null;
+
+async function render(){
+  if(!page) return;
+  if(renderTask){try{renderTask.cancel()}catch(e){}}
+  const base=page.getViewport({scale:1});
+  const cssWidth=Math.min(window.innerWidth,1920);
+  const scale=cssWidth/base.width;
+  const viewport=page.getViewport({scale});
+  const outputScale=Math.min(window.devicePixelRatio||1,1.35);
+  canvas.width=Math.floor(viewport.width*outputScale);
+  canvas.height=Math.floor(viewport.height*outputScale);
+  canvas.style.width=Math.floor(viewport.width)+'px';
+  canvas.style.height=Math.floor(viewport.height)+'px';
+  const transform=outputScale!==1?[outputScale,0,0,outputScale,0,0]:null;
+  renderTask=page.render({canvasContext:ctx,viewport,transform});
+  try{await renderTask.promise}catch(e){if(e?.name!=='RenderingCancelledException')throw e}
+}
+
+async function init(){
+  try{
+    pdfDoc=await pdfjsLib.getDocument({url:'Roze-Remit-Portfolio.pdf',disableAutoFetch:false,disableStream:false}).promise;
+    page=await pdfDoc.getPage(1);
+    await render();
+    status.hidden=true;
+  }catch(err){
+    console.error(err);
+    status.textContent='Case study asset is not available yet.';
+  }
+}
+
+let timer;
+window.addEventListener('resize',()=>{clearTimeout(timer);timer=setTimeout(render,180)});
+init();
+</script>
+</body>
+</html>
