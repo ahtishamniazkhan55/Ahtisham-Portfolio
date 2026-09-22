@@ -23,6 +23,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Apply GT Standard typography
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text()
+          s = s.replace('font-family:Arial,Helvetica,sans-serif', 'font-family:"GT Standard","Helvetica Neue",Helvetica,Arial,sans-serif')
+          p.write_text(s)
+          PY
       - name: Setup Pages
         uses: actions/configure-pages@v5
         with:
