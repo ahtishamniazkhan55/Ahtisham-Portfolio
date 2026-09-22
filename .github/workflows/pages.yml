@@ -6,13 +6,13 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
 concurrency:
   group: "pages"
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -23,24 +23,53 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Apply GT Standard typography
+
+      - name: Prepare portfolio
         run: |
           python - <<'PY'
           from pathlib import Path
-          p = Path('index.html')
+          import base64
+
+          chunks = [Path(f"video/chunk{i:02d}.txt").read_text().strip() for i in range(6)]
+          Path("hero-video.mp4").write_bytes(base64.b64decode("".join(chunks)))
+
+          p = Path("index.html")
           s = p.read_text()
-          s = s.replace('font-family:Arial,Helvetica,sans-serif', 'font-family:"GT Standard","Helvetica Neue",Helvetica,Arial,sans-serif')
+
+          s = s.replace(
+              'font-family:Arial,Helvetica,sans-serif',
+              'font-family:"GT Standard","Helvetica Neue",Helvetica,Arial,sans-serif'
+          )
+
+          old_hero = '<div class="portrait reveal"><img src="https://avatars.githubusercontent.com/u/301350504?v=4" alt="Ahtisham Niaz"></div>'
+          new_hero = '<div class="portrait hero-media reveal"><video id="heroVideo" src="hero-video.mp4" autoplay muted loop playsinline preload="auto" aria-label="Ahtisham Niaz portfolio hero video"></video></div>'
+          s = s.replace(old_hero, new_hero)
+
+          old_contact = '<section class="contact shell"><div class="kicker">Have a product that needs clarity?</div><a class="big" href="mailto:ahtishamniazkhan55@gmail.com">Let’s work<br>together.</a><footer class="footer"><span>© 2026 Ahtisham Niaz</span><div><a href="#top">Back to top</a> · <a href="mailto:ahtishamniazkhan55@gmail.com">Email</a></div></footer></section>'
+          new_contact = '<section class="contact"><div class="shell contact-inner"><div class="contact-head"><div class="kicker">Have a product that needs clarity?</div><a class="big" href="mailto:ahtishamniazkhan55@gmail.com">Let’s work<br>together.</a></div><footer class="footer"><span>© 2026 Ahtisham Niaz</span><div class="footer-links"><a href="#top">Back to top</a><a href="mailto:ahtishamniazkhan55@gmail.com">Email</a></div></footer></div></section>'
+          s = s.replace(old_contact, new_contact)
+
+          overrides = '''
+          <style>
+          .portrait video{width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(1) contrast(1.05)}
+          .contact{padding:155px 0 58px;border-top:1px solid var(--line)}
+          .contact-inner{width:min(100%,var(--max));margin:auto;padding-inline:var(--pad)}
+          .contact-head{display:grid;grid-template-columns:minmax(160px,.55fr) 1.45fr;gap:clamp(30px,8vw,130px);align-items:start}
+          .contact .big{display:block;margin:0;font-size:clamp(58px,8vw,140px);line-height:.9;letter-spacing:-.075em;font-weight:500}
+          .footer{display:flex;justify-content:space-between;align-items:flex-end;gap:25px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:22px;margin-top:110px;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+          .footer-links{display:flex;gap:20px;align-items:center}
+          @media(max-width:620px){.contact-head{grid-template-columns:1fr;gap:18px}.contact{padding:100px 0 42px}.footer{margin-top:76px;align-items:flex-start}.footer-links{width:100%;justify-content:space-between}}
+          </style>
+          '''
+          s = s.replace('</head>', overrides + '</head>')
+
+          old_script = "<script>document.getElementById('copy').addEventListener"
+          new_script = "<script>const hv=document.getElementById('heroVideo');if(hv){hv.muted=true;hv.loop=true;const keepPlaying=()=>hv.play().catch(()=>{});hv.addEventListener('ended',keepPlaying);document.addEventListener('visibilitychange',()=>{if(!document.hidden)keepPlaying()});keepPlaying()}document.getElementById('copy').addEventListener"
+          s = s.replace(old_script, new_script)
+
           p.write_text(s)
           PY
-      - name: Persist typography change
-        run: |
-          if ! git diff --quiet -- index.html; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add index.html
-            git commit -m "Apply GT Standard typography [skip ci]"
-            git push
-          fi
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
         with:
