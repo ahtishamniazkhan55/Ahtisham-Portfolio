@@ -23,6 +23,55 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Apply final portfolio fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('index.html')
+          s = p.read_text()
+
+          # Force fresh, full-resolution assets from the repository root.
+          s = s.replace('src="ui-ux-designer.png"', 'src="ui-ux-designer.png?v=20260923-hd"')
+          s = s.replace('src="hero-video.mp4"', 'src="hero-video.mp4?v=20260923-hd"')
+
+          # Avoid transform rasterization on hero media, which can make them look soft.
+          s = s.replace('<div class="portrait reveal">', '<div class="portrait">')
+          s = s.replace('<div class="frame reveal">', '<div class="frame">')
+
+          # Add aggressive cache-busting hints for the page itself.
+          cache_meta = '''\n<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">\n<meta http-equiv="Pragma" content="no-cache">\n<meta http-equiv="Expires" content="0">'''
+          if 'http-equiv="Cache-Control"' not in s:
+              s = s.replace('<meta name="description"', cache_meta + '\n<meta name="description"', 1)
+
+          # Final overrides win over all previous responsive/type declarations.
+          fixes = '''
+          <style id="final-portfolio-fixes">
+          html,body{font-family:"GT Standard","Helvetica Neue",Helvetica,Arial,sans-serif!important;font-stretch:normal!important}
+          .hero h1{font-size:116px!important;line-height:1!important;letter-spacing:0!important;font-weight:500!important}
+          #work .section-title{font-size:80px!important;line-height:1.05!important;letter-spacing:0!important;font-weight:500!important}
+          .about h2{font-size:80px!important;line-height:1.05!important;letter-spacing:0!important;font-weight:500!important}
+          .hero p,.project h3,.project p,.about-copy,.quote p,.contact .big{letter-spacing:0!important}
+          .portrait img{image-rendering:auto!important;filter:none!important;transform:none!important;backface-visibility:visible!important}
+          .frame{aspect-ratio:16/9!important;transform:none!important}
+          .frame video{filter:none!important;transform:none!important;image-rendering:auto!important;object-fit:cover!important}
+          #work a.project{display:block!important;position:relative!important;z-index:2!important;cursor:pointer!important;pointer-events:auto!important}
+          #work a.project *{pointer-events:none!important}
+          @media(max-width:980px){
+            .hero h1{font-size:96px!important}
+            #work .section-title,.about h2{font-size:72px!important}
+          }
+          @media(max-width:620px){
+            .hero h1{font-size:72px!important}
+            #work .section-title,.about h2{font-size:56px!important}
+          }
+          </style>
+          '''
+          s = s.replace('</head>', fixes + '</head>', 1)
+          p.write_text(s)
+          PY
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
         with:
