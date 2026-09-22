@@ -23,48 +23,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Prepare portfolio
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          p = Path('index.html')
-          s = p.read_text()
-
-          # Use the newly uploaded full-resolution media from the repo root.
-          s = s.replace('assets/hero-portrait.jpg', 'ui-ux-designer.png')
-          s = s.replace('assets/hero-video.mp4', 'hero-video.mp4')
-
-          # Requested desktop typography sizes.
-          s = s.replace('font-size:clamp(74px,9vw,164px)', 'font-size:116px')
-          s = s.replace('font-size:clamp(72px,16vw,126px)', 'font-size:96px')
-          s = s.replace('font-size:clamp(64px,19vw,92px)', 'font-size:72px')
-
-          # Make the first Roze Remit project open the case-study detail page.
-          s = s.replace('<article class="project"><div class="visual v1">', '<a class="project" href="roze-remit.html"><div class="visual v1">', 1)
-          first_close = '<span class="idx">01 · 2026</span></div></article>'
-          s = s.replace(first_close, '<span class="idx">01 · 2026</span></div></a>', 1)
-
-          responsive_overrides = '''
-          <style>
-          #work .section-title{font-size:80px;line-height:1;letter-spacing:-.02em}
-          .about h2{font-size:80px;line-height:1;letter-spacing:-.02em}
-          @media(max-width:980px){
-            #work .section-title{font-size:72px}
-            .about h2{font-size:72px}
-          }
-          @media(max-width:620px){
-            #work .section-title{font-size:56px}
-            .about h2{font-size:56px}
-          }
-          </style>
-          '''
-          s = s.replace('</head>', responsive_overrides + '</head>')
-
-          p.write_text(s)
-          PY
-
       - name: Setup Pages
         uses: actions/configure-pages@v5
         with:
