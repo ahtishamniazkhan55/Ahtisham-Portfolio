@@ -7,21 +7,16 @@
 <title>Roze Remit — Ahtisham Niaz</title>
 <style>
 *{box-sizing:border-box}
-html,body{margin:0;width:100%;height:100%;background:#fff;overflow:hidden}
-.case-study{position:fixed;inset:0;width:100%;height:100%;background:#fff}
-.case-study iframe{display:block;width:100%;height:100%;border:0;background:#fff}
-.fallback{font-family:Arial,Helvetica,sans-serif;display:grid;place-items:center;min-height:100vh;padding:32px;text-align:center;color:#111}
-.fallback a{color:inherit;font-weight:700}
+html,body{margin:0;padding:0;background:#fff}
+body{min-height:100vh;overflow-x:hidden}
+.case-study{width:100%;max-width:960px;margin:0 auto;background:#fff}
+.case-study img{display:block;width:100%;height:auto;margin:0;padding:0;border:0}
+@media(max-width:600px){.case-study{max-width:none}}
 </style>
 </head>
 <body>
 <main class="case-study" aria-label="Roze Remit case study">
-  <iframe
-    src="Roze-Remit-Portfolio.pdf?v=20260923-static#toolbar=0&navpanes=0&scrollbar=1&view=FitH"
-    title="Roze Remit Case Study"
-    loading="eager">
-    <div class="fallback">Your browser cannot display this case study. <a href="Roze-Remit-Portfolio.pdf">Open the Roze Remit case study PDF</a>.</div>
-  </iframe>
+<img src="assets/roze-case.jpg?v=1" alt="Roze Remit website redesign case study">
 </main>
 </body>
 </html>
