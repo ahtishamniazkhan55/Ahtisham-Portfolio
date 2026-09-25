@@ -1,0 +1,1 @@
+HD portfolio thumbnails are stored in this folder.
