@@ -1,0 +1,1 @@
+Restored project thumbnails to known-valid image blobs after invalid binary uploads caused missing images.
