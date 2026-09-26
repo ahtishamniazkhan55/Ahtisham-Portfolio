@@ -1,0 +1,97 @@
+name: Refresh portfolio thumbnails
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/refresh-thumbnails.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download project cover images from Behance
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets/work-hd
+
+          fetch_cover() {
+            name="$1"
+            url="$2"
+            echo "Fetching $name from $url"
+
+            html="$(curl -L --fail --retry 3 --retry-delay 2 \
+              -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36' \
+              -H 'Accept-Language: en-US,en;q=0.9' \
+              "$url")"
+
+            image_url="$(HTML="$html" python3 - <<'PY'
+import os, re, html
+s = os.environ['HTML']
+patterns = [
+    r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)',
+    r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
+    r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)',
+    r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image["\']',
+]
+for p in patterns:
+    m = re.search(p, s, re.I)
+    if m:
+        print(html.unescape(m.group(1)))
+        break
+PY
+)"
+
+            if [ -z "$image_url" ]; then
+              echo "Could not find a Behance cover image for $name" >&2
+              exit 1
+            fi
+
+            echo "Cover: $image_url"
+            curl -L --fail --retry 3 --retry-delay 2 \
+              -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36' \
+              "$image_url" -o "assets/work-hd/$name.jpg"
+
+            bytes="$(wc -c < "assets/work-hd/$name.jpg")"
+            kind="$(file -b "assets/work-hd/$name.jpg")"
+            echo "$name: $bytes bytes, $kind"
+            if [ "$bytes" -lt 30000 ]; then
+              echo "Downloaded cover for $name is unexpectedly small" >&2
+              exit 1
+            fi
+          }
+
+          fetch_cover "roze-remit" "https://www.behance.net/gallery/255442019/Roze-Remit-Website-Redesign-Fintech-UIUX-Case-Study"
+          fetch_cover "boat-app" "https://www.behance.net/gallery/233309381/Booking-Management-SaaS-Redesign-Case-Study-(CRM-ERP)"
+          fetch_cover "d-transfer" "https://www.behance.net/gallery/210620831/Finance-App-Design"
+          fetch_cover "scentri" "https://www.behance.net/gallery/246606421/Luxury-Fragrance-E-commerce-Website-Design"
+          fetch_cover "working-live" "https://www.behance.net/gallery/191771407/Website-Design-Fully-Responsive"
+
+      - name: Point portfolio cards at verified JPG covers
+        run: |
+          python3 - <<'PY'
+from pathlib import Path
+p = Path('index.html')
+s = p.read_text()
+for name in ['roze-remit','boat-app','d-transfer','scentri','working-live']:
+    import re
+    s = re.sub(rf'assets/work-hd/{re.escape(name)}\.(?:webp|jpg)(?:\?v=[^"\']*)?', f'assets/work-hd/{name}.jpg?v=behance-cover-1', s)
+p.write_text(s)
+PY
+
+      - name: Commit verified covers
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/work-hd index.html
+          git commit -m "Fix portfolio thumbnails with Behance covers"
+          git push
