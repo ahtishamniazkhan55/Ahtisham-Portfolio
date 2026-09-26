@@ -1,100 +1,64 @@
-name: Refresh portfolio thumbnails
+name: Build HD portfolio thumbnails
 
 on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/refresh-thumbnails.yml'
+      - 'asset-upload/READY.txt'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  refresh:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Download verified Behance project covers
+      - name: Rebuild original project thumbnails
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p assets/work-hd
-
-          fetch_cover() {
-            name="$1"
-            url="$2"
-            echo "Fetching $name"
-
-            curl -L --fail --retry 3 --retry-delay 2 \
-              -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36' \
-              -H 'Accept-Language: en-US,en;q=0.9' \
-              "$url" -o /tmp/behance-page.html
-
-            image_url="$(python3 - <<'PY'
-from html.parser import HTMLParser
-from html import unescape
-class Parser(HTMLParser):
-    def __init__(self):
-        super().__init__(); self.url = None
-    def handle_starttag(self, tag, attrs):
-        if tag.lower() != 'meta' or self.url: return
-        a = {str(k).lower(): v for k, v in attrs}
-        key = (a.get('property') or a.get('name') or '').lower()
-        if key in ('og:image', 'twitter:image') and a.get('content'):
-            self.url = unescape(a['content'])
-p = Parser()
-with open('/tmp/behance-page.html','r',encoding='utf-8',errors='ignore') as f:
-    p.feed(f.read())
-print(p.url or '')
-PY
-)"
-
-            if [ -z "$image_url" ]; then
-              echo "ERROR: no cover URL found for $name" >&2
-              exit 1
-            fi
-
-            echo "Downloading $image_url"
-            curl -L --fail --retry 3 --retry-delay 2 \
-              -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36' \
-              "$image_url" -o "assets/work-hd/$name.jpg"
-
-            bytes="$(wc -c < "assets/work-hd/$name.jpg")"
+          mkdir -p assets/work-final
+          for name in roze-remit boat-app d-transfer scentri working-live; do
+            echo "Rebuilding $name"
+            cat asset-upload/$name/chunk*.txt | base64 -d > assets/work-final/$name.webp
+            bytes=$(wc -c < assets/work-final/$name.webp)
             echo "$name bytes: $bytes"
-            file "assets/work-hd/$name.jpg"
-            if [ "$bytes" -lt 30000 ]; then
-              echo "ERROR: $name image is too small" >&2
-              exit 1
-            fi
-          }
+            python3 - "$name" <<'PY'
+import sys
+from pathlib import Path
+name=sys.argv[1]
+p=Path('assets/work-final')/(name+'.webp')
+b=p.read_bytes()
+if len(b) < 40000 or b[:4] != b'RIFF' or b[8:12] != b'WEBP':
+    raise SystemExit(f'Invalid WebP: {p} ({len(b)} bytes)')
+print(f'validated {p}: {len(b)} bytes')
+PY
+          done
 
-          fetch_cover "roze-remit" "https://www.behance.net/gallery/255442019/Roze-Remit-Website-Redesign-Fintech-UIUX-Case-Study"
-          fetch_cover "boat-app" "https://www.behance.net/gallery/233309381/Booking-Management-SaaS-Redesign-Case-Study-(CRM-ERP)"
-          fetch_cover "d-transfer" "https://www.behance.net/gallery/210620831/Finance-App-Design"
-          fetch_cover "scentri" "https://www.behance.net/gallery/246606421/Luxury-Fragrance-E-commerce-Website-Design"
-          fetch_cover "working-live" "https://www.behance.net/gallery/191771407/Website-Design-Fully-Responsive"
-
-      - name: Update portfolio image paths
+      - name: Point portfolio to HD originals
         shell: bash
         run: |
           python3 - <<'PY'
 from pathlib import Path
 import re
-p = Path('index.html')
-s = p.read_text(encoding='utf-8')
+p=Path('index.html')
+s=p.read_text(encoding='utf-8')
 for name in ['roze-remit','boat-app','d-transfer','scentri','working-live']:
-    s = re.sub(rf'assets/work-hd/{re.escape(name)}\.(?:webp|jpg)(?:\?v=[^"\s>]*)?', f'assets/work-hd/{name}.jpg?v=verified-cover-1', s)
-p.write_text(s, encoding='utf-8')
+    s=re.sub(rf'assets/(?:work|work-hd|work-final)/{re.escape(name)}\.(?:jpg|jpeg|png|webp)(?:\?v=[^"\s>]*)?', f'assets/work-final/{name}.webp?v=hd-original-1', s)
+p.write_text(s,encoding='utf-8')
 PY
 
-      - name: Commit working thumbnails
+      - name: Commit verified HD thumbnails
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add assets/work-hd index.html
-          git commit -m "Use verified Behance project covers"
+          git add assets/work-final index.html
+          git commit -m "Use original HD project thumbnails"
           git push
