@@ -12,13 +12,12 @@ permissions:
 
 jobs:
   refresh:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download project cover images from Behance
+      - name: Download verified Behance project covers
         shell: bash
         run: |
           set -euo pipefail
@@ -27,45 +26,47 @@ jobs:
           fetch_cover() {
             name="$1"
             url="$2"
-            echo "Fetching $name from $url"
+            echo "Fetching $name"
 
-            html="$(curl -L --fail --retry 3 --retry-delay 2 \
+            curl -L --fail --retry 3 --retry-delay 2 \
               -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36' \
               -H 'Accept-Language: en-US,en;q=0.9' \
-              "$url")"
+              "$url" -o /tmp/behance-page.html
 
-            image_url="$(HTML="$html" python3 - <<'PY'
-import os, re, html
-s = os.environ['HTML']
-patterns = [
-    r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)',
-    r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
-    r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)',
-    r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image["\']',
-]
-for p in patterns:
-    m = re.search(p, s, re.I)
-    if m:
-        print(html.unescape(m.group(1)))
-        break
+            image_url="$(python3 - <<'PY'
+from html.parser import HTMLParser
+from html import unescape
+class Parser(HTMLParser):
+    def __init__(self):
+        super().__init__(); self.url = None
+    def handle_starttag(self, tag, attrs):
+        if tag.lower() != 'meta' or self.url: return
+        a = {str(k).lower(): v for k, v in attrs}
+        key = (a.get('property') or a.get('name') or '').lower()
+        if key in ('og:image', 'twitter:image') and a.get('content'):
+            self.url = unescape(a['content'])
+p = Parser()
+with open('/tmp/behance-page.html','r',encoding='utf-8',errors='ignore') as f:
+    p.feed(f.read())
+print(p.url or '')
 PY
 )"
 
             if [ -z "$image_url" ]; then
-              echo "Could not find a Behance cover image for $name" >&2
+              echo "ERROR: no cover URL found for $name" >&2
               exit 1
             fi
 
-            echo "Cover: $image_url"
+            echo "Downloading $image_url"
             curl -L --fail --retry 3 --retry-delay 2 \
               -A 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131 Safari/537.36' \
               "$image_url" -o "assets/work-hd/$name.jpg"
 
             bytes="$(wc -c < "assets/work-hd/$name.jpg")"
-            kind="$(file -b "assets/work-hd/$name.jpg")"
-            echo "$name: $bytes bytes, $kind"
+            echo "$name bytes: $bytes"
+            file "assets/work-hd/$name.jpg"
             if [ "$bytes" -lt 30000 ]; then
-              echo "Downloaded cover for $name is unexpectedly small" >&2
+              echo "ERROR: $name image is too small" >&2
               exit 1
             fi
           }
@@ -76,22 +77,24 @@ PY
           fetch_cover "scentri" "https://www.behance.net/gallery/246606421/Luxury-Fragrance-E-commerce-Website-Design"
           fetch_cover "working-live" "https://www.behance.net/gallery/191771407/Website-Design-Fully-Responsive"
 
-      - name: Point portfolio cards at verified JPG covers
+      - name: Update portfolio image paths
+        shell: bash
         run: |
           python3 - <<'PY'
 from pathlib import Path
+import re
 p = Path('index.html')
-s = p.read_text()
+s = p.read_text(encoding='utf-8')
 for name in ['roze-remit','boat-app','d-transfer','scentri','working-live']:
-    import re
-    s = re.sub(rf'assets/work-hd/{re.escape(name)}\.(?:webp|jpg)(?:\?v=[^"\']*)?', f'assets/work-hd/{name}.jpg?v=behance-cover-1', s)
-p.write_text(s)
+    s = re.sub(rf'assets/work-hd/{re.escape(name)}\.(?:webp|jpg)(?:\?v=[^"\s>]*)?', f'assets/work-hd/{name}.jpg?v=verified-cover-1', s)
+p.write_text(s, encoding='utf-8')
 PY
 
-      - name: Commit verified covers
+      - name: Commit working thumbnails
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add assets/work-hd index.html
-          git commit -m "Fix portfolio thumbnails with Behance covers"
+          git commit -m "Use verified Behance project covers"
           git push
